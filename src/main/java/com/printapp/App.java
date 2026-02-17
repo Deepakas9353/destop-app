@@ -26,6 +26,7 @@ public class App extends Application {
     private ComboBox<Integer> copiesDropdown;
     private ComboBox<String> layoutDropdown;
     private ComboBox<String> sideDropdown;
+    private ComboBox<String> colorModeDropdown;
     private Label fileNameLabel;
 
     @Override
@@ -64,6 +65,12 @@ public class App extends Application {
                 "Single Side", "Front and Back (Duplex)"));
         sideDropdown.setValue("Single Side");
         root.getChildren().add(createFieldBox("Print Side", sideDropdown));
+
+        // Color Mode Option
+        colorModeDropdown = new ComboBox<>(FXCollections.observableArrayList(
+                "Black & White", "Color"));
+        colorModeDropdown.setValue("Black & White");
+        root.getChildren().add(createFieldBox("Print Color Mode", colorModeDropdown));
 
         // File Upload
         VBox fileBox = new VBox(10);
@@ -143,6 +150,7 @@ public class App extends Application {
             config.setCopies(copiesDropdown.getValue());
             config.setLayout(layoutDropdown.getValue());
             config.setSideOption(sideDropdown.getValue());
+            config.setColorMode(colorModeDropdown.getValue());
 
             // Save last used printer
             settingsService.saveLastPrinter(printer);

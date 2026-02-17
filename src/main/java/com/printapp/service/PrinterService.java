@@ -14,6 +14,9 @@ import java.awt.print.Printable;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import javax.print.attribute.HashPrintRequestAttributeSet;
+import javax.print.attribute.PrintRequestAttributeSet;
+import javax.print.attribute.standard.Chromaticity;
 
 public class PrinterService {
 
@@ -24,8 +27,7 @@ public class PrinterService {
 
         List<String> printerNames = new ArrayList<>();
 
-        PrintService[] printServices =
-                PrintServiceLookup.lookupPrintServices(null, null);
+        PrintService[] printServices = PrintServiceLookup.lookupPrintServices(null, null);
 
         for (PrintService service : printServices) {
             printerNames.add(service.getName());
@@ -59,11 +61,9 @@ public class PrinterService {
 
         if (fileName.endsWith(".pdf")) {
             printPdf(file, selectedService, config);
-        }
-        else if (fileName.matches(".*\\.(png|jpg|jpeg)$")) {
+        } else if (fileName.matches(".*\\.(png|jpg|jpeg)$")) {
             printImage(file, selectedService, config);
-        }
-        else {
+        } else {
             throw new Exception("Unsupported file format. Only PDF and Images supported.");
         }
     }
@@ -73,8 +73,7 @@ public class PrinterService {
     // =============================
     private PrintService findPrinter(String printerName) {
 
-        PrintService[] services =
-                PrintServiceLookup.lookupPrintServices(null, null);
+        PrintService[] services = PrintServiceLookup.lookupPrintServices(null, null);
 
         for (PrintService service : services) {
             if (service.getName().equalsIgnoreCase(printerName)) {
@@ -89,8 +88,8 @@ public class PrinterService {
     // PDF Printing
     // =============================
     private void printPdf(File file,
-                          PrintService service,
-                          PrintConfig config) throws Exception {
+            PrintService service,
+            PrintConfig config) throws Exception {
 
         try (PDDocument document = PDDocument.load(file)) {
 
@@ -102,13 +101,20 @@ public class PrinterService {
             // Copies
             job.setCopies(config.getCopies());
 
-            PDFPrintable printable =
-                    new PDFPrintable(document, Scaling.SHRINK_TO_FIT);
+            PDFPrintable printable = new PDFPrintable(document, Scaling.SHRINK_TO_FIT);
 
             job.setPrintable(printable);
 
+            // Color Mode
+            PrintRequestAttributeSet attr = new HashPrintRequestAttributeSet();
+            if ("Black & White".equals(config.getColorMode())) {
+                attr.add(Chromaticity.MONOCHROME);
+            } else if ("Color".equals(config.getColorMode())) {
+                attr.add(Chromaticity.COLOR);
+            }
+
             // Silent Print
-            job.print();
+            job.print(attr);
         }
     }
 
@@ -116,8 +122,8 @@ public class PrinterService {
     // Image Printing
     // =============================
     private void printImage(File file,
-                            PrintService service,
-                            PrintConfig config) throws Exception {
+            PrintService service,
+            PrintConfig config) throws Exception {
 
         PrinterJob job = PrinterJob.getPrinterJob();
 
@@ -126,7 +132,8 @@ public class PrinterService {
 
         job.setPrintable((graphics, pageFormat, pageIndex) -> {
 
-            if (pageIndex > 0) return Printable.NO_SUCH_PAGE;
+            if (pageIndex > 0)
+                return Printable.NO_SUCH_PAGE;
 
             try {
                 Image image = ImageIO.read(file);
@@ -153,6 +160,14 @@ public class PrinterService {
             }
         });
 
-        job.print();
+        // Color Mode
+        PrintRequestAttributeSet attr = new HashPrintRequestAttributeSet();
+        if ("Black & White".equals(config.getColorMode())) {
+            attr.add(Chromaticity.MONOCHROME);
+        } else if ("Color".equals(config.getColorMode())) {
+            attr.add(Chromaticity.COLOR);
+        }
+
+        job.print(attr);
     }
 }
