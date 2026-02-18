@@ -1,6 +1,15 @@
-com\printapp\service\SettingsService$1.class
+com\printapp\App$5.class
+com\printapp\App$4.class
+com\printapp\service\ApiService.class
 com\printapp\App.class
 com\printapp\Launcher.class
-com\printapp\service\SettingsService.class
+com\printapp\App$3.class
 com\printapp\service\PrinterService.class
+com\printapp\service\SettingsService$1.class
+com\printapp\App$2.class
+com\printapp\service\ApiService$1.class
 com\printapp\model\PrintConfig.class
+com\printapp\model\PrintJobDto.class
+com\printapp\App$1.class
+com\printapp\model\PrintJobRecord.class
+com\printapp\service\SettingsService.class

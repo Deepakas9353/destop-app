@@ -1,180 +1,314 @@
 package com.printapp;
 
 import com.printapp.model.PrintConfig;
+import com.printapp.model.PrintJobDto;
+import com.printapp.model.PrintJobRecord;
+import com.printapp.service.ApiService;
 import com.printapp.service.PrinterService;
-import com.printapp.service.SettingsService;
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
+import javafx.collections.ObservableList;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import java.io.File;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class App extends Application {
 
     private final PrinterService printerService = new PrinterService();
-    private final PrintConfig config = new PrintConfig();
-    private File selectedFile;
-
-    private Label statusLabel;
-    private ComboBox<String> printerDropdown;
-    private ComboBox<Integer> copiesDropdown;
-    private ComboBox<String> layoutDropdown;
-    private ComboBox<String> sideDropdown;
-    private ComboBox<String> colorModeDropdown;
-    private Label fileNameLabel;
+    private final ApiService apiService = new ApiService();
+    private final ObservableList<PrintJobRecord> printJobs = FXCollections.observableArrayList();
+    private List<String> availablePrinters;
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
 
     @Override
     public void start(Stage primaryStage) {
-        primaryStage.setTitle("Elite Print Utility");
+        primaryStage.setTitle("Elite Print Grid Utility");
+
+        // Load available printers
+        availablePrinters = printerService.getAvailablePrinters();
 
         VBox root = new VBox(20);
         root.setPadding(new Insets(30));
-        root.setPrefWidth(450);
-        root.setStyle("-fx-background-color: #f4f7f6; -fx-font-family: 'Segoe UI', sans-serif;");
+        root.setStyle("-fx-background-color: #f8fafc; -fx-font-family: 'Segoe UI', sans-serif;");
 
         // Header
-        Label title = new Label("Elite Print Utility");
-        title.setStyle("-fx-font-size: 24px; -fx-font-weight: bold; -fx-text-fill: #2c3e50;");
-        root.getChildren().add(title);
+        Label title = new Label("Print Management Grid");
+        title.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #1e293b;");
 
-        // Printer Selection
-        VBox printerBox = createFieldBox("Select Printer", printerDropdown = new ComboBox<>());
-        refreshPrinters();
-        root.getChildren().add(printerBox);
+        Label subtitle = new Label("Manage and execute your print jobs efficiently");
+        subtitle.setStyle("-fx-font-size: 14px; -fx-text-fill: #64748b;");
 
-        // Copies and Layout Row
-        HBox row1 = new HBox(20);
-        copiesDropdown = new ComboBox<>(FXCollections.observableArrayList(makeRange(1, 50)));
-        copiesDropdown.setValue(1);
-        row1.getChildren().add(createFieldBox("Copies", copiesDropdown));
+        // Refresh Button
+        Button refreshBtn = new Button("Refresh");
+        refreshBtn.setStyle(
+                "-fx-background-color: #6366f1; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5; -fx-padding: 8 20;");
+        refreshBtn.setOnAction(e -> handleRefresh());
 
-        layoutDropdown = new ComboBox<>(FXCollections.observableArrayList(
-                "1 Page per Sheet", "2 Pages per Sheet (1x2)", "4 Pages per Sheet (1x4)"));
-        layoutDropdown.setValue("1 Page per Sheet");
-        row1.getChildren().add(createFieldBox("Page Layout", layoutDropdown));
-        root.getChildren().add(row1);
+        HBox topBar = new HBox(20, new VBox(5, title, subtitle), new Region(), refreshBtn);
+        HBox.setHgrow(topBar.getChildren().get(1), Priority.ALWAYS);
+        topBar.setAlignment(Pos.CENTER_LEFT);
 
-        // Side Option
-        sideDropdown = new ComboBox<>(FXCollections.observableArrayList(
-                "Single Side", "Front and Back (Duplex)"));
-        sideDropdown.setValue("Single Side");
-        root.getChildren().add(createFieldBox("Print Side", sideDropdown));
+        root.getChildren().add(topBar);
 
-        // Color Mode Option
-        colorModeDropdown = new ComboBox<>(FXCollections.observableArrayList(
-                "Black & White", "Color"));
-        colorModeDropdown.setValue("Black & White");
-        root.getChildren().add(createFieldBox("Print Color Mode", colorModeDropdown));
+        // TableView Setup
+        TableView<PrintJobRecord> table = new TableView<>(printJobs);
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setStyle(
+                "-fx-background-radius: 10; -fx-background-color: white; -fx-border-color: #e2e8f0; -fx-border-radius: 10; -fx-padding: 5;");
+        table.setPrefHeight(400);
 
-        // File Upload
-        VBox fileBox = new VBox(10);
-        Button uploadBtn = new Button("Upload PDF / Image");
-        uploadBtn.setStyle(
-                "-fx-background-color: #3498db; -fx-text-fill: white; -fx-padding: 10 20; -fx-background-radius: 5;");
-        fileNameLabel = new Label("No file selected");
-        fileNameLabel.setStyle("-fx-text-fill: #7f8c8d; -fx-font-italic: true;");
+        // Columns
+        TableColumn<PrintJobRecord, Integer> idCol = new TableColumn<>("ID");
+        idCol.setCellValueFactory(new PropertyValueFactory<>("id"));
+        idCol.setPrefWidth(50);
 
-        uploadBtn.setOnAction(e -> {
-            FileChooser fileChooser = new FileChooser();
-            fileChooser.getExtensionFilters().addAll(
-                    new FileChooser.ExtensionFilter("Support Files", "*.pdf", "*.png", "*.jpg", "*.jpeg"));
-            selectedFile = fileChooser.showOpenDialog(primaryStage);
-            if (selectedFile != null) {
-                fileNameLabel.setText(selectedFile.getName());
-                config.setFileToPrint(selectedFile);
+        TableColumn<PrintJobRecord, Integer> copiesCol = new TableColumn<>("Copies");
+        copiesCol.setCellValueFactory(new PropertyValueFactory<>("copies"));
+        copiesCol.setPrefWidth(80);
+
+        TableColumn<PrintJobRecord, Integer> colorCol = new TableColumn<>("Color Mode");
+        colorCol.setCellValueFactory(new PropertyValueFactory<>("colorMode"));
+        colorCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(Integer item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item == 10 ? "Color (10)" : "B/W (1)");
+                }
             }
         });
-        fileBox.getChildren().addAll(new Label("Document"), uploadBtn, fileNameLabel);
-        root.getChildren().add(fileBox);
 
-        // Print Button
-        Button printBtn = new Button("PRINT NOW");
-        printBtn.setMaxWidth(Double.MAX_VALUE);
-        printBtn.setStyle(
-                "-fx-background-color: #27ae60; -fx-text-fill: white; -fx-font-size: 16px; -fx-font-weight: bold; -fx-padding: 12; -fx-background-radius: 5;");
-        printBtn.setOnAction(e -> handlePrint());
-        root.getChildren().add(printBtn);
+        TableColumn<PrintJobRecord, Integer> duplexCol = new TableColumn<>("Duplex Mode");
+        duplexCol.setCellValueFactory(new PropertyValueFactory<>("duplexMode"));
+        duplexCol.setCellFactory(column -> new TableCell<>() {
+            @Override
+            protected void updateItem(Integer item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty || item == null) {
+                    setText(null);
+                } else {
+                    setText(item == 2 ? "Duplex (2)" : "Single (1)");
+                }
+            }
+        });
 
-        // Status Label
-        statusLabel = new Label("System Ready");
-        statusLabel.setStyle("-fx-text-fill: #16a085;");
-        root.getChildren().add(statusLabel);
+        TableColumn<PrintJobRecord, Integer> pagesCol = new TableColumn<>("Pages/Sheet");
+        pagesCol.setCellValueFactory(new PropertyValueFactory<>("pagesPerSheet"));
 
-        Scene scene = new Scene(root);
+        // Printer ComboBox Column
+        TableColumn<PrintJobRecord, String> printerCol = new TableColumn<>("Printer");
+        printerCol.setCellFactory(column -> new TableCell<>() {
+            private final ComboBox<String> comboBox = new ComboBox<>(
+                    FXCollections.observableArrayList(availablePrinters));
+            {
+                comboBox.setMaxWidth(Double.MAX_VALUE);
+                comboBox.setOnAction(e -> {
+                    if (getTableView() != null && getIndex() >= 0 && getIndex() < getTableView().getItems().size()) {
+                        PrintJobRecord record = getTableView().getItems().get(getIndex());
+                        record.setSelectedPrinter(comboBox.getValue());
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(String item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    PrintJobRecord record = getTableView().getItems().get(getIndex());
+                    if (record.getSelectedPrinter() == null || record.getSelectedPrinter().isEmpty()) {
+                        if (!availablePrinters.isEmpty()) {
+                            comboBox.setValue(availablePrinters.get(0));
+                            record.setSelectedPrinter(availablePrinters.get(0));
+                        }
+                    } else {
+                        comboBox.setValue(record.getSelectedPrinter());
+                    }
+                    setGraphic(comboBox);
+                }
+            }
+        });
+
+        // Upload Button Column
+        TableColumn<PrintJobRecord, Void> uploadCol = new TableColumn<>("Upload File");
+        uploadCol.setCellFactory(column -> new TableCell<>() {
+            private final Button btn = new Button("Upload");
+            private final Label fileLabel = new Label();
+            private final HBox container = new HBox(10, btn, fileLabel);
+            {
+                container.setAlignment(Pos.CENTER_LEFT);
+                btn.setStyle(
+                        "-fx-background-color: #3b82f6; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5;");
+                btn.setOnAction(e -> {
+                    PrintJobRecord record = getTableView().getItems().get(getIndex());
+                    FileChooser fileChooser = new FileChooser();
+                    fileChooser.getExtensionFilters().addAll(
+                            new FileChooser.ExtensionFilter("Files", "*.pdf", "*.png", "*.jpg", "*.jpeg"));
+                    File file = fileChooser.showOpenDialog(primaryStage);
+                    if (file != null) {
+                        record.setUploadedFile(file);
+                        fileLabel.setText(file.getName());
+                        fileLabel.setTooltip(new Tooltip(file.getAbsolutePath()));
+                    }
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    PrintJobRecord record = getTableView().getItems().get(getIndex());
+                    fileLabel.setText(record.getUploadedFile() != null ? record.getUploadedFile().getName() : "None");
+                    setGraphic(container);
+                }
+            }
+        });
+
+        // Print Button Column
+        TableColumn<PrintJobRecord, Void> printCol = new TableColumn<>("Actions");
+        printCol.setCellFactory(column -> new TableCell<>() {
+            private final Button btn = new Button("PRINT");
+            {
+                btn.setStyle(
+                        "-fx-background-color: #10b981; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5; -fx-padding: 5 15;");
+                btn.setMaxWidth(Double.MAX_VALUE);
+                btn.setOnAction(e -> {
+                    PrintJobRecord record = getTableView().getItems().get(getIndex());
+                    handlePrint(record);
+                });
+            }
+
+            @Override
+            protected void updateItem(Void item, boolean empty) {
+                super.updateItem(item, empty);
+                if (empty) {
+                    setGraphic(null);
+                } else {
+                    setGraphic(btn);
+                }
+            }
+        });
+
+        @SuppressWarnings("unchecked")
+        ObservableList<TableColumn<PrintJobRecord, ?>> columns = FXCollections.observableArrayList(
+                idCol, copiesCol, colorCol, duplexCol, pagesCol, printerCol, uploadCol, printCol);
+        table.getColumns().addAll(columns);
+        root.getChildren().add(table);
+
+        // Footer / Status
+        HBox footer = new HBox();
+        footer.setAlignment(Pos.CENTER_RIGHT);
+        Label statusInfo = new Label("System Synchronized | Refreshing every 10s");
+        statusInfo.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px;");
+        footer.getChildren().add(statusInfo);
+        root.getChildren().add(footer);
+
+        Scene scene = new Scene(root, 1100, 600);
         primaryStage.setScene(scene);
         primaryStage.show();
+
+        // Initial Load
+        handleRefresh();
     }
 
-    private VBox createFieldBox(String labelText, Control control) {
-        VBox box = new VBox(5);
-        Label label = new Label(labelText);
-        label.setStyle("-fx-font-weight: bold; -fx-text-fill: #34495e;");
-        control.setPrefWidth(200);
-        box.getChildren().addAll(label, control);
-        return box;
+    private void handleRefresh() {
+        executorService.submit(() -> {
+            try {
+                List<PrintJobDto> dtos = apiService.fetchPrintConfigs();
+                if (dtos == null) {
+                    Platform.runLater(() -> showAlert("Refresh Error", "Failed to fetch latest data"));
+                    return;
+                }
+
+                Platform.runLater(() -> {
+                    printJobs.clear();
+                    for (PrintJobDto dto : dtos) {
+                        PrintJobRecord record = new PrintJobRecord(
+                                dto.getId(),
+                                dto.getCopies(),
+                                dto.getColorMode(),
+                                dto.getDuplexMode(),
+                                dto.getPagesPerSheet());
+                        printJobs.add(record);
+                    }
+                });
+            } catch (Exception e) {
+                e.printStackTrace();
+                Platform.runLater(() -> showAlert("Refresh Error", "Failed to fetch latest data"));
+            }
+        });
     }
 
-    private List<Integer> makeRange(int start, int end) {
-        return java.util.stream.IntStream.rangeClosed(start, end).boxed().toList();
-    }
-
-    private final SettingsService settingsService = new SettingsService();
-
-    private void refreshPrinters() {
-        List<String> printers = printerService.getAvailablePrinters();
-        printerDropdown.setItems(FXCollections.observableArrayList(printers));
-
-        String lastPrinter = settingsService.getLastPrinter();
-        if (lastPrinter != null && printers.contains(lastPrinter)) {
-            printerDropdown.setValue(lastPrinter);
-        } else if (!printers.isEmpty()) {
-            printerDropdown.setValue(printers.get(0));
+    @Override
+    public void stop() {
+        if (executorService != null) {
+            executorService.shutdown();
         }
     }
 
-    private void handlePrint() {
+    private void handlePrint(PrintJobRecord record) {
+        if (record.getUploadedFile() == null) {
+            showAlert("Upload Required", "Please upload a file before printing.");
+            return;
+        }
+
         try {
-            if (selectedFile == null) {
-                showAlert("Error", "Please select a file first.");
-                return;
+            PrintConfig config = new PrintConfig();
+            config.setCopies(record.getCopies());
+            config.setColorMode(record.getColorMode() == 10 ? "Color" : "Black & White");
+            config.setSideOption(record.getDuplexMode() == 2 ? "Front and Back (Duplex)" : "Single Side");
+
+            String layoutStr;
+            switch (record.getPagesPerSheet()) {
+                case 2 -> layoutStr = "2 Pages per Sheet (1x2)";
+                case 4 -> layoutStr = "4 Pages per Sheet (1x4)";
+                default -> layoutStr = "1 Page per Sheet";
             }
+            config.setLayout(layoutStr);
+            config.setSelectedPrinter(record.getSelectedPrinter());
+            config.setFileToPrint(record.getUploadedFile());
 
-            String printer = printerDropdown.getValue();
-            config.setSelectedPrinter(printer);
-            config.setCopies(copiesDropdown.getValue());
-            config.setLayout(layoutDropdown.getValue());
-            config.setSideOption(sideDropdown.getValue());
-            config.setColorMode(colorModeDropdown.getValue());
-
-            // Save last used printer
-            settingsService.saveLastPrinter(printer);
-
-            statusLabel.setText("Sending to printer...");
-            statusLabel.setStyle("-fx-text-fill: #d35400;");
-
+            System.out.println("Printing ID: " + record.getId() + " - " + record.getUploadedFile().getName() + " on "
+                    + record.getSelectedPrinter());
             printerService.print(config);
 
-            statusLabel.setText("Print job sent successfully!");
-            statusLabel.setStyle("-fx-text-fill: #27ae60;");
+            showInfo("Success", "Print job sent successfully for " + record.getUploadedFile().getName());
 
         } catch (Exception ex) {
-            statusLabel.setText("Error: " + ex.getMessage());
-            statusLabel.setStyle("-fx-text-fill: #c0392b;");
-            showAlert("Print Error", ex.getMessage());
+            showAlert("Print Error", "Failed to print: " + ex.getMessage());
         }
     }
 
     private void showAlert(String title, String message) {
         Alert alert = new Alert(Alert.AlertType.ERROR);
         alert.setTitle(title);
+        alert.setHeaderText(null);
         alert.setContentText(message);
-        alert.showAndWait();
+        alert.show();
+    }
+
+    private void showInfo(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.show();
     }
 
     public static void main(String[] args) {
