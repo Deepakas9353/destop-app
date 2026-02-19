@@ -5,6 +5,8 @@ import com.printapp.model.PrintJobDto;
 import com.printapp.model.PrintJobRecord;
 import com.printapp.service.ApiService;
 import com.printapp.service.PrinterService;
+import com.printapp.service.QrCodeService;
+import com.printapp.service.WebSocketClientService;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.collections.FXCollections;
@@ -14,6 +16,8 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
+import javafx.scene.image.ImageView;
+import javafx.scene.image.WritableImage;
 import javafx.scene.layout.*;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -27,55 +31,75 @@ public class App extends Application {
 
     private final PrinterService printerService = new PrinterService();
     private final ApiService apiService = new ApiService();
+    private final QrCodeService qrCodeService = new QrCodeService();
     private final ObservableList<PrintJobRecord> printJobs = FXCollections.observableArrayList();
     private List<String> availablePrinters;
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private WebSocketClientService webSocketClientService;
 
     @Override
     public void start(Stage primaryStage) {
-        primaryStage.setTitle("Elite Print Grid Utility");
+        primaryStage.setTitle("Elite Print Utility");
+
+        // Load Application Icon
+        try {
+            primaryStage.getIcons()
+                    .add(new javafx.scene.image.Image(getClass().getResourceAsStream("/icons/app_icon.png")));
+        } catch (Exception e) {
+            System.out.println("No icon found at /icons/app_icon.png, using default.");
+        }
 
         // Load available printers
         availablePrinters = printerService.getAvailablePrinters();
 
-        VBox root = new VBox(20);
-        root.setPadding(new Insets(30));
-        root.setStyle("-fx-background-color: #f8fafc; -fx-font-family: 'Segoe UI', sans-serif;");
+        BorderPane mainLayout = new BorderPane();
+        mainLayout.getStyleClass().add("root");
 
-        // Header
-        Label title = new Label("Print Management Grid");
-        title.setStyle("-fx-font-size: 28px; -fx-font-weight: bold; -fx-text-fill: #1e293b;");
-
+        // --- HEADER BAR ---
+        VBox headerContent = new VBox(5);
+        Label title = new Label("Elite Print Utility");
+        title.getStyleClass().add("title-label");
         Label subtitle = new Label("Manage and execute your print jobs efficiently");
-        subtitle.setStyle("-fx-font-size: 14px; -fx-text-fill: #64748b;");
+        subtitle.getStyleClass().add("subtitle-label");
+        headerContent.getChildren().addAll(title, subtitle);
 
-        // Refresh Button
-        Button refreshBtn = new Button("Refresh");
-        refreshBtn.setStyle(
-                "-fx-background-color: #6366f1; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5; -fx-padding: 8 20;");
+        // Static QR Code in Header
+        VBox qrBox = createHeaderQrBox();
+
+        Button refreshBtn = new Button("Refresh Data");
+        refreshBtn.getStyleClass().addAll("button", "button-primary");
         refreshBtn.setOnAction(e -> handleRefresh());
 
-        HBox topBar = new HBox(20, new VBox(5, title, subtitle), new Region(), refreshBtn);
-        HBox.setHgrow(topBar.getChildren().get(1), Priority.ALWAYS);
-        topBar.setAlignment(Pos.CENTER_LEFT);
+        HBox headerActions = new HBox(20, qrBox, refreshBtn);
+        headerActions.setAlignment(Pos.CENTER_RIGHT);
 
-        root.getChildren().add(topBar);
+        HBox headerBar = new HBox();
+        headerBar.getStyleClass().add("header-bar");
+        headerBar.setAlignment(Pos.CENTER_LEFT);
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        headerBar.getChildren().addAll(headerContent, spacer, headerActions);
 
-        // TableView Setup
+        mainLayout.setTop(headerBar);
+
+        // --- CENTER CONTENT (TABLE) ---
+        VBox centerContainer = new VBox(20);
+        centerContainer.getStyleClass().add("main-container");
+
         TableView<PrintJobRecord> table = new TableView<>(printJobs);
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setStyle(
-                "-fx-background-radius: 10; -fx-background-color: white; -fx-border-color: #e2e8f0; -fx-border-radius: 10; -fx-padding: 5;");
-        table.setPrefHeight(400);
+        table.setPrefHeight(500);
 
         // Columns
         TableColumn<PrintJobRecord, Integer> idCol = new TableColumn<>("ID");
         idCol.setCellValueFactory(new PropertyValueFactory<>("id"));
-        idCol.setPrefWidth(50);
+        idCol.setMaxWidth(60);
+        idCol.setMinWidth(60);
 
         TableColumn<PrintJobRecord, Integer> copiesCol = new TableColumn<>("Copies");
         copiesCol.setCellValueFactory(new PropertyValueFactory<>("copies"));
-        copiesCol.setPrefWidth(80);
+        copiesCol.setMaxWidth(80);
+        copiesCol.setMinWidth(80);
 
         TableColumn<PrintJobRecord, Integer> colorCol = new TableColumn<>("Color Mode");
         colorCol.setCellValueFactory(new PropertyValueFactory<>("colorMode"));
@@ -91,7 +115,7 @@ public class App extends Application {
             }
         });
 
-        TableColumn<PrintJobRecord, Integer> duplexCol = new TableColumn<>("Duplex Mode");
+        TableColumn<PrintJobRecord, Integer> duplexCol = new TableColumn<>("Sides");
         duplexCol.setCellValueFactory(new PropertyValueFactory<>("duplexMode"));
         duplexCol.setCellFactory(column -> new TableCell<>() {
             @Override
@@ -100,7 +124,7 @@ public class App extends Application {
                 if (empty || item == null) {
                     setText(null);
                 } else {
-                    setText(item == 2 ? "Duplex (2)" : "Single (1)");
+                    setText(item == 2 ? "Front & Back" : "Front");
                 }
             }
         });
@@ -145,14 +169,14 @@ public class App extends Application {
 
         // Upload Button Column
         TableColumn<PrintJobRecord, Void> uploadCol = new TableColumn<>("Upload File");
+        uploadCol.setMinWidth(250);
         uploadCol.setCellFactory(column -> new TableCell<>() {
             private final Button btn = new Button("Upload");
             private final Label fileLabel = new Label();
             private final HBox container = new HBox(10, btn, fileLabel);
             {
                 container.setAlignment(Pos.CENTER_LEFT);
-                btn.setStyle(
-                        "-fx-background-color: #3b82f6; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5;");
+                btn.getStyleClass().addAll("button", "button-upload");
                 btn.setOnAction(e -> {
                     PrintJobRecord record = getTableView().getItems().get(getIndex());
                     FileChooser fileChooser = new FileChooser();
@@ -185,8 +209,7 @@ public class App extends Application {
         printCol.setCellFactory(column -> new TableCell<>() {
             private final Button btn = new Button("PRINT");
             {
-                btn.setStyle(
-                        "-fx-background-color: #10b981; -fx-text-fill: white; -fx-font-weight: bold; -fx-background-radius: 5; -fx-padding: 5 15;");
+                btn.getStyleClass().addAll("button", "button-success");
                 btn.setMaxWidth(Double.MAX_VALUE);
                 btn.setOnAction(e -> {
                     PrintJobRecord record = getTableView().getItems().get(getIndex());
@@ -209,22 +232,40 @@ public class App extends Application {
         ObservableList<TableColumn<PrintJobRecord, ?>> columns = FXCollections.observableArrayList(
                 idCol, copiesCol, colorCol, duplexCol, pagesCol, printerCol, uploadCol, printCol);
         table.getColumns().addAll(columns);
-        root.getChildren().add(table);
+        centerContainer.getChildren().add(table);
+        mainLayout.setCenter(centerContainer);
 
-        // Footer / Status
+        // --- FOOTER ---
         HBox footer = new HBox();
+        footer.getStyleClass().add("main-container");
+        footer.setPadding(new Insets(10, 30, 20, 30));
         footer.setAlignment(Pos.CENTER_RIGHT);
-        Label statusInfo = new Label("System Synchronized | Refreshing every 10s");
-        statusInfo.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px;");
+        Label statusInfo = new Label("System Synchronized | Live WebSocket Connected");
+        statusInfo.getStyleClass().add("status-label");
         footer.getChildren().add(statusInfo);
-        root.getChildren().add(footer);
+        mainLayout.setBottom(footer);
 
-        Scene scene = new Scene(root, 1100, 600);
+        Scene scene = new Scene(mainLayout, 1200, 700);
+        try {
+            scene.getStylesheets().add(getClass().getResource("/styles/style.css").toExternalForm());
+        } catch (Exception e) {
+            System.out.println("CSS not found, falling back to basic styles.");
+        }
+
         primaryStage.setScene(scene);
         primaryStage.show();
 
         // Initial Load
         handleRefresh();
+
+        // Start WebSocket connection for real-time updates
+        webSocketClientService = new WebSocketClientService(() -> {
+            Platform.runLater(() -> {
+                System.out.println("[App] WebSocket triggered grid refresh.");
+                handleRefresh();
+            });
+        });
+        webSocketClientService.connect();
     }
 
     private void handleRefresh() {
@@ -245,6 +286,18 @@ public class App extends Application {
                                 dto.getColorMode(),
                                 dto.getDuplexMode(),
                                 dto.getPagesPerSheet());
+
+                        // Handle mobile uploaded file if present
+                        if (dto.getFileBase64() != null && !dto.getFileBase64().isEmpty()) {
+                            try {
+                                File tempFile = saveBase64ToFile(dto.getFileBase64(), dto.getFileName());
+                                record.setUploadedFile(tempFile);
+                            } catch (Exception e) {
+                                System.err.println(
+                                        "Failed to save mobile file for ID " + dto.getId() + ": " + e.getMessage());
+                            }
+                        }
+
                         printJobs.add(record);
                     }
                 });
@@ -257,6 +310,9 @@ public class App extends Application {
 
     @Override
     public void stop() {
+        if (webSocketClientService != null) {
+            webSocketClientService.disconnect();
+        }
         if (executorService != null) {
             executorService.shutdown();
         }
@@ -309,6 +365,50 @@ public class App extends Application {
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.show();
+    }
+
+    /**
+     * Creates a static QR code box for the header.
+     */
+    private VBox createHeaderQrBox() {
+        WritableImage qrImage = qrCodeService.generateQrImage(null, 100);
+        ImageView qrView = new ImageView(qrImage);
+        qrView.setFitWidth(100);
+        qrView.setFitHeight(100);
+        qrView.setPreserveRatio(true);
+
+        StackPane qrContainer = new StackPane(qrView);
+        qrContainer.getStyleClass().add("header-qr-container");
+
+        Label qrLabel = new Label("Scan to Print");
+        qrLabel.getStyleClass().add("header-qr-label");
+
+        VBox box = new VBox(4, qrContainer, qrLabel);
+        box.setAlignment(Pos.CENTER);
+        return box;
+    }
+
+    private File saveBase64ToFile(String base64Data, String fileName) throws Exception {
+        if (base64Data == null || base64Data.isEmpty())
+            return null;
+
+        // Remove data URI prefix if present
+        String pureBase64 = base64Data;
+        if (base64Data.contains(",")) {
+            pureBase64 = base64Data.split(",")[1];
+        }
+
+        byte[] decodedBytes = java.util.Base64.getDecoder().decode(pureBase64);
+
+        // Use user's temp directory
+        String tempDir = System.getProperty("java.io.tmpdir");
+        File file = new File(tempDir, "print_upload_" + System.currentTimeMillis() + "_" + fileName);
+
+        try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file)) {
+            fos.write(decodedBytes);
+        }
+
+        return file;
     }
 
     public static void main(String[] args) {

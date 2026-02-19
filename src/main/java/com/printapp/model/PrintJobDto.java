@@ -11,7 +11,7 @@ public class PrintJobDto {
     @JsonProperty("color_mode")
     private int colorMode;
 
-    @JsonProperty("duplex_mode")
+    @JsonProperty("sides")
     private int duplexMode;
 
     @JsonProperty("pages_per_sheet")
@@ -22,6 +22,12 @@ public class PrintJobDto {
 
     @JsonProperty("file_path")
     private String filePath;
+
+    @JsonProperty("file_name")
+    private String fileName;
+
+    @JsonProperty("file_base64")
+    private String fileBase64;
 
     @JsonProperty("created_at")
     private String createdAt;
@@ -81,6 +87,22 @@ public class PrintJobDto {
 
     public void setFilePath(String filePath) {
         this.filePath = filePath;
+    }
+
+    public String getFileName() {
+        return fileName;
+    }
+
+    public void setFileName(String fileName) {
+        this.fileName = fileName;
+    }
+
+    public String getFileBase64() {
+        return fileBase64;
+    }
+
+    public void setFileBase64(String fileBase64) {
+        this.fileBase64 = fileBase64;
     }
 
     public String getCreatedAt() {

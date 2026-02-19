@@ -1,0 +1,163 @@
+/* Modern Styling for Elite Print Utility */
+
+.root {
+    -fx-background-color: #F8FAFC;
+    -fx-font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+/* Header Bar Styling */
+.header-bar {
+    -fx-background-color: white;
+    -fx-padding: 20 30;
+    -fx-border-color: #E2E8F0;
+    -fx-border-width: 0 0 1 0;
+}
+
+.title-label {
+    -fx-font-size: 24px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #1E293B;
+}
+
+.subtitle-label {
+    -fx-font-size: 14px;
+    -fx-text-fill: #64748B;
+}
+
+/* Main Container */
+.main-container {
+    -fx-padding: 30;
+}
+
+/* TableView Styling */
+.table-view {
+    -fx-background-color: white;
+    -fx-background-radius: 12;
+    -fx-border-radius: 12;
+    -fx-border-color: #E2E8F0;
+    -fx-padding: 5;
+    -fx-selection-bar: #DBEAFE;
+    -fx-selection-bar-non-focused: #EFF6FF;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: #F1F5F9;
+    -fx-background-radius: 12 12 0 0;
+}
+
+.table-view .column-header {
+    -fx-background-color: transparent;
+    -fx-size: 45;
+}
+
+.table-view .column-header .label {
+    -fx-text-fill: #475569;
+    -fx-font-weight: bold;
+    -fx-alignment: CENTER_LEFT;
+}
+
+.table-row-cell {
+    -fx-cell-size: 50;
+    -fx-background-color: white;
+    -fx-border-color: transparent transparent #F1F5F9 transparent;
+}
+
+.table-row-cell:odd {
+    -fx-background-color: #FAFBFC;
+}
+
+.table-row-cell:hover {
+    -fx-background-color: #F8FAFC;
+}
+
+/* Button Styling */
+.button {
+    -fx-cursor: hand;
+    -fx-background-radius: 8;
+    -fx-font-weight: bold;
+    -fx-transition: 0.2s;
+    -fx-padding: 8 20;
+}
+
+.button-primary {
+    -fx-background-color: #2563EB;
+    -fx-text-fill: white;
+}
+
+.button-primary:hover {
+    -fx-background-color: #1D4ED8;
+    -fx-scale-x: 1.05;
+    -fx-scale-y: 1.05;
+}
+
+.button-secondary {
+    -fx-background-color: #F1F5F9;
+    -fx-text-fill: #475569;
+}
+
+.button-secondary:hover {
+    -fx-background-color: #E2E8F0;
+}
+
+.button-success {
+    -fx-background-color: #10B981;
+    -fx-text-fill: white;
+}
+
+.button-success:hover {
+    -fx-background-color: #059669;
+    -fx-scale-x: 1.05;
+    -fx-scale-y: 1.05;
+}
+
+.button-upload {
+    -fx-background-color: #3B82F6;
+    -fx-text-fill: white;
+}
+
+.button-upload:hover {
+    -fx-background-color: #2563EB;
+}
+
+/* ComboBox and other controls */
+.combo-box {
+    -fx-background-radius: 8;
+    -fx-background-color: white;
+    -fx-border-color: #E2E8F0;
+    -fx-border-radius: 8;
+}
+
+.combo-box:focused {
+    -fx-border-color: #2563EB;
+}
+
+.text-field {
+    -fx-background-radius: 8;
+    -fx-border-radius: 8;
+}
+
+/* Status Label */
+.status-label {
+    -fx-text-fill: #94A3B8;
+    -fx-font-size: 13px;
+}
+
+/* ============================================================
+   HEADER INTEGRATED QR CODE STYLES
+   ============================================================ */
+
+.header-qr-container {
+    -fx-background-color: white;
+    -fx-background-radius: 10;
+    -fx-border-color: #E2E8F0;
+    -fx-border-radius: 10;
+    -fx-border-width: 1.5;
+    -fx-padding: 6;
+    -fx-cursor: default;
+}
+
+.header-qr-label {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #475569;
+}
